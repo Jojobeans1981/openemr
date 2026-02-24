@@ -40,12 +40,22 @@ def create_agent():
     llm = _create_llm()
     memory = MemorySaver()
 
-    agent = create_react_agent(
-        model=llm,
-        tools=TOOLS,
-        checkpointer=memory,
-        state_modifier=HEALTHCARE_AGENT_SYSTEM_PROMPT,
-    )
+    # LangGraph API changed across versions: try state_modifier, then prompt
+    try:
+        agent = create_react_agent(
+            model=llm,
+            tools=TOOLS,
+            checkpointer=memory,
+            state_modifier=HEALTHCARE_AGENT_SYSTEM_PROMPT,
+        )
+    except TypeError:
+        logger.info("state_modifier not supported, falling back to prompt parameter")
+        agent = create_react_agent(
+            model=llm,
+            tools=TOOLS,
+            checkpointer=memory,
+            prompt=HEALTHCARE_AGENT_SYSTEM_PROMPT,
+        )
     return agent
 
 
@@ -62,7 +72,6 @@ def get_agent():
 
 async def chat(message: str, session_id: str = "default") -> dict:
     """Process a chat message through the healthcare agent with full observability."""
-    agent = get_agent()
     trace_id = str(uuid.uuid4())[:8]
 
     # Start observability trace
@@ -75,6 +84,7 @@ async def chat(message: str, session_id: str = "default") -> dict:
     history.add_user_message(message)
 
     try:
+        agent = get_agent()
         tracer.start_llm()
         result = await agent.ainvoke(
             {"messages": [HumanMessage(content=message)]},

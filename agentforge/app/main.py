@@ -43,3 +43,35 @@ async def health_check():
         "version": "0.1.0",
         "model": settings.model_name,
     }
+
+
+@app.get("/debug")
+async def debug_info():
+    """Diagnostic endpoint to verify configuration and dependencies."""
+    import importlib
+
+    checks = {}
+
+    # Check API key presence
+    checks["google_api_key_set"] = bool(settings.google_api_key)
+    checks["langsmith_tracing"] = settings.langchain_tracing_v2
+    checks["langsmith_key_set"] = bool(settings.langchain_api_key)
+    checks["model_name"] = settings.model_name
+
+    # Check package versions
+    for pkg in ["langchain_core", "langgraph", "langchain_google_genai", "httpx"]:
+        try:
+            mod = importlib.import_module(pkg)
+            checks[f"{pkg}_version"] = getattr(mod, "__version__", "installed")
+        except ImportError:
+            checks[f"{pkg}_version"] = "NOT INSTALLED"
+
+    # Try creating the agent
+    try:
+        from app.agent.healthcare_agent import get_agent
+        agent = get_agent()
+        checks["agent_creation"] = "OK"
+    except Exception as e:
+        checks["agent_creation"] = f"FAILED: {type(e).__name__}: {e}"
+
+    return checks
