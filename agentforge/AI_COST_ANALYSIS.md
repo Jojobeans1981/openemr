@@ -115,3 +115,34 @@ If Groq free tier limits are exceeded, options:
 | Monthly cost (1,000 users) | <$500 | $25.00 |
 
 **Result:** Significantly under budget by switching to Groq free tier.
+
+---
+
+## 5. Observability Cost
+
+| Service | Tier | Monthly Cost | What It Provides |
+|---------|------|-------------|-----------------|
+| LangSmith | Free | $0.00 | Trace logging, latency breakdown, token tracking |
+| Custom module | Built-in | $0.00 | TraceRecord persistence, dashboard stats, feedback, eval history |
+| Render logs | Free | $0.00 | Application logging, deployment monitoring |
+
+All observability is free-tier or self-hosted. The custom observability module (`app/observability.py`) provides:
+
+- Per-request trace records (17 fields) persisted to JSONL
+- Latency breakdown: LLM time, tool time, verification time, total time
+- Token usage and provider-aware cost tracking ($0.00 for Groq)
+- User feedback (thumbs up/down) stored per trace_id
+- Eval history with pass rates and category breakdown
+- Dashboard API (`GET /api/dashboard`) for Streamlit sidebar
+
+---
+
+## 6. Testing Infrastructure Cost
+
+| Component | Tests | Runtime | Cost |
+|-----------|-------|---------|------|
+| Unit tests (pytest) | 68 | <2 seconds | $0.00 (no API keys needed) |
+| Integration evals | 56 | ~5-10 min | $0.00 (Groq free tier) |
+| LangSmith tracing | N/A | Always-on | $0.00 (free tier) |
+
+Testing requires zero additional spend -- unit tests are fully isolated, and integration evals use the same Groq free tier as production.
