@@ -12,15 +12,18 @@ COPY pyproject.toml .
 COPY app/ app/
 COPY ui/ ui/
 COPY evals/ evals/
-COPY data/ data/
 COPY start.sh .
+COPY .env.example .env.example
+
+# Create data directory for runtime
+RUN mkdir -p data/observability
 
 # Install Python dependencies
 RUN pip install --no-cache-dir .
 
 RUN chmod +x start.sh
 
-# Expose ports (FastAPI: 8000, Streamlit: 8501)
-EXPOSE 8000 8501
+# Railway uses PORT env var
+EXPOSE 8501 8000
 
 CMD ["./start.sh"]
