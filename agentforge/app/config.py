@@ -2,9 +2,11 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # LLM
+    # LLM Provider: "groq" or "gemini"
+    llm_provider: str = "groq"
+    groq_api_key: str = ""
     google_api_key: str = ""
-    model_name: str = "gemini-2.0-flash"
+    model_name: str = "llama-3.3-70b-versatile"
     model_temperature: float = 0.1
     model_max_tokens: int = 4096
 

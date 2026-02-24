@@ -2,8 +2,8 @@ import logging
 import os
 import uuid
 
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
@@ -23,16 +23,28 @@ logger = logging.getLogger(__name__)
 TOOLS = [drug_interaction_check, symptom_lookup, provider_search, appointment_availability, insurance_coverage_check]
 
 
-def _create_llm() -> ChatGoogleGenerativeAI:
-    """Create the primary LLM (Gemini Pro)."""
-    if settings.google_api_key:
-        os.environ["GOOGLE_API_KEY"] = settings.google_api_key
+def _create_llm() -> BaseChatModel:
+    """Create the primary LLM based on configured provider."""
+    provider = settings.llm_provider.lower()
 
-    return ChatGoogleGenerativeAI(
-        model=settings.model_name,
-        temperature=settings.model_temperature,
-        max_output_tokens=settings.model_max_tokens,
-    )
+    if provider == "groq":
+        from langchain_groq import ChatGroq
+        if settings.groq_api_key:
+            os.environ["GROQ_API_KEY"] = settings.groq_api_key
+        return ChatGroq(
+            model=settings.model_name,
+            temperature=settings.model_temperature,
+            max_tokens=settings.model_max_tokens,
+        )
+    else:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        if settings.google_api_key:
+            os.environ["GOOGLE_API_KEY"] = settings.google_api_key
+        return ChatGoogleGenerativeAI(
+            model=settings.model_name,
+            temperature=settings.model_temperature,
+            max_output_tokens=settings.model_max_tokens,
+        )
 
 
 def create_agent():

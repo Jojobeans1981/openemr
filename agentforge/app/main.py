@@ -53,6 +53,8 @@ async def debug_info():
     checks = {}
 
     # Check API key presence
+    checks["llm_provider"] = settings.llm_provider
+    checks["groq_api_key_set"] = bool(settings.groq_api_key)
     checks["google_api_key_set"] = bool(settings.google_api_key)
     checks["langsmith_tracing"] = settings.langchain_tracing_v2
     checks["langsmith_key_set"] = bool(settings.langchain_api_key)
