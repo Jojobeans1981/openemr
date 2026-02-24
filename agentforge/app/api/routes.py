@@ -1,10 +1,12 @@
+import json
 import time
 import uuid
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.agent.healthcare_agent import chat
+from app.agent.healthcare_agent import chat, chat_stream
 from app.agent.memory import clear_session
 from app.observability import get_dashboard_stats, record_feedback
 from app.verification.verifier import post_process_response, verify_response
@@ -59,6 +61,49 @@ async def chat_endpoint(request: ChatRequest):
         latency_ms=result.get("latency_ms", 0),
         tokens=result.get("tokens", {"input": 0, "output": 0, "total": 0}),
         verification=verification.to_dict(),
+    )
+
+
+@router.post("/chat/stream")
+async def chat_stream_endpoint(request: ChatRequest):
+    """Stream a healthcare chat response via Server-Sent Events."""
+    session_id = request.session_id or str(uuid.uuid4())
+
+    async def event_generator():
+        full_response = ""
+        tools_used = []
+        metadata = {}
+
+        async for event in chat_stream(message=request.message, session_id=session_id):
+            event_type = event["type"]
+            content = event["content"]
+
+            if event_type == "token":
+                full_response += content
+                yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+            elif event_type == "tool_start":
+                tools_used.append(content)
+                yield f"data: {json.dumps({'type': 'tool_start', 'content': content})}\n\n"
+            elif event_type == "tool_end":
+                yield f"data: {json.dumps({'type': 'tool_end', 'content': content})}\n\n"
+            elif event_type == "done":
+                metadata = json.loads(content)
+                # Run verification on the complete response
+                verification = verify_response(
+                    response=full_response,
+                    tools_used=tools_used,
+                    original_query=request.message,
+                )
+                metadata["confidence"] = verification.confidence
+                metadata["verification"] = verification.to_dict()
+                yield f"data: {json.dumps({'type': 'done', 'content': metadata})}\n\n"
+            elif event_type == "error":
+                yield f"data: {json.dumps({'type': 'error', 'content': content})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

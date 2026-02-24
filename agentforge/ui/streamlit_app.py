@@ -74,6 +74,7 @@ EXAMPLE_QUESTIONS = [
     "Find me a cardiologist",
     "What appointments are available for neurology?",
     "Does Blue Cross PPO cover an MRI?",
+    "What are the side effects of metformin?",
 ]
 
 
@@ -96,9 +97,9 @@ def main():
         st.markdown("### About")
         st.markdown(
             "AgentForge is a healthcare AI agent powered by "
-            "LangChain + Llama 3.3 with 5 specialized tools:\n\n"
+            "LangChain + Llama 3.3 with 6 specialized tools:\n\n"
             "**Drug Interactions** · **Symptom Lookup** · "
-            "**Provider Search** · **Appointments** · **Insurance**"
+            "**Provider Search** · **Appointments** · **Insurance** · **Medication Info**"
         )
 
         st.divider()
@@ -221,36 +222,109 @@ def _render_metadata(meta: dict, msg_index: int):
             st.caption(f"Feedback: {icon} recorded")
 
 
+def _stream_message(message: str) -> tuple[str, dict]:
+    """Stream a message via SSE endpoint. Returns (full_text, metadata)."""
+    import json
+
+    full_text = ""
+    metadata = {}
+    tool_status = st.empty()
+
+    try:
+        with httpx.Client(timeout=90.0) as client:
+            with client.stream(
+                "POST",
+                f"{API_BASE_URL}/chat/stream",
+                json={"message": message, "session_id": st.session_state.session_id},
+            ) as resp:
+                if resp.status_code != 200:
+                    return "", {}
+
+                for line in resp.iter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = json.loads(line[6:])
+                    event_type = data.get("type", "")
+
+                    if event_type == "token":
+                        full_text += data["content"]
+                        yield data["content"]
+                    elif event_type == "tool_start":
+                        tool_status.caption(f"🔧 Using tool: {data['content']}...")
+                    elif event_type == "tool_end":
+                        tool_status.empty()
+                    elif event_type == "done":
+                        metadata.update(data.get("content", {}))
+                    elif event_type == "error":
+                        yield f"\n\nError: {data['content']}"
+    except httpx.ConnectError:
+        yield "Cannot connect to backend. Please try again in a moment."
+    except Exception:
+        yield "An error occurred while streaming the response."
+
+    # Store metadata on session state for retrieval after streaming
+    st.session_state._stream_metadata = metadata
+    st.session_state._stream_full_text = full_text
+
+
 def _process_message(message: str):
-    """Process a user message and get agent response."""
+    """Process a user message and get agent response with streaming."""
     st.session_state.messages.append({"role": "user", "content": message})
     with st.chat_message("user"):
         st.markdown(message)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analyzing your query..."):
-            result = send_message(message)
+        # Try streaming first, fall back to non-streaming
+        try:
+            full_text = st.write_stream(_stream_message(message))
+            meta = st.session_state.pop("_stream_metadata", {})
+            # full_text from write_stream is the concatenated string
 
-        if result:
-            st.markdown(result["response"])
-            meta = {
-                "tools_used": result.get("tools_used", []),
-                "confidence": result.get("confidence", 0),
-                "sources": result.get("sources", []),
-                "trace_id": result.get("trace_id", ""),
-                "latency_ms": result.get("latency_ms", 0),
-                "tokens": result.get("tokens", {}),
-            }
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": result["response"],
-                "metadata": meta,
-            })
-            _render_metadata(meta, len(st.session_state.messages) - 1)
-        else:
-            error_msg = "Sorry, I couldn't process your request. Please try again."
-            st.markdown(error_msg)
-            st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            if meta:
+                result_meta = {
+                    "tools_used": meta.get("tools_used", []),
+                    "confidence": meta.get("confidence", 0),
+                    "sources": meta.get("sources", []),
+                    "trace_id": meta.get("trace_id", ""),
+                    "latency_ms": meta.get("latency_ms", 0),
+                    "tokens": meta.get("tokens", {}),
+                }
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": full_text,
+                    "metadata": result_meta,
+                })
+                _render_metadata(result_meta, len(st.session_state.messages) - 1)
+            else:
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": full_text,
+                })
+        except Exception:
+            # Fall back to non-streaming
+            with st.spinner("Analyzing your query..."):
+                result = send_message(message)
+
+            if result:
+                st.markdown(result["response"])
+                meta = {
+                    "tools_used": result.get("tools_used", []),
+                    "confidence": result.get("confidence", 0),
+                    "sources": result.get("sources", []),
+                    "trace_id": result.get("trace_id", ""),
+                    "latency_ms": result.get("latency_ms", 0),
+                    "tokens": result.get("tokens", {}),
+                }
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": result["response"],
+                    "metadata": meta,
+                })
+                _render_metadata(meta, len(st.session_state.messages) - 1)
+            else:
+                error_msg = "Sorry, I couldn't process your request. Please try again."
+                st.markdown(error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
 
 if __name__ == "__main__":

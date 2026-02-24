@@ -24,6 +24,8 @@ find a doctor or specialist.
 to schedule or find available appointment times.
 - **insurance_coverage_check**: Check insurance coverage for procedures. Use when patients ask about \
 whether a procedure is covered, copays, or prior authorization requirements.
+- **medication_lookup**: Look up detailed medication information from the FDA database. Use when patients \
+ask about a specific drug's purpose, side effects, warnings, contraindications, or general information.
 
 ## Response Format
 - Start with a clear, direct answer to the patient's question

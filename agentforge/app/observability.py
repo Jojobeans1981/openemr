@@ -104,10 +104,16 @@ class RequestTracer:
         self.record.input_tokens = input_tokens
         self.record.output_tokens = output_tokens
         self.record.total_tokens = input_tokens + output_tokens
-        # Gemini 2.0 Flash pricing: $0.10/1M input, $0.40/1M output
-        self.record.estimated_cost_usd = (
-            (input_tokens / 1_000_000 * 0.10) + (output_tokens / 1_000_000 * 0.40)
-        )
+        # Cost depends on provider
+        from app.config import settings
+        if settings.llm_provider.lower() == "groq":
+            # Groq free tier — no cost
+            self.record.estimated_cost_usd = 0.0
+        else:
+            # Gemini 2.0 Flash pricing: $0.10/1M input, $0.40/1M output
+            self.record.estimated_cost_usd = (
+                (input_tokens / 1_000_000 * 0.10) + (output_tokens / 1_000_000 * 0.40)
+            )
 
     def set_error(self, error: str, category: str = "unknown"):
         self.record.error = error

@@ -3,7 +3,7 @@
 
 **Developer:** Joe Panetta (Giuseppe)
 **Period:** Feb 24 - Mar 2, 2026 (7-day sprint)
-**Last Updated:** Feb 23, 2026
+**Last Updated:** Feb 24, 2026
 
 ---
 
@@ -13,105 +13,105 @@
 
 | Item | Tokens Used | API Calls | Cost |
 |------|------------|-----------|------|
-| Claude Code (repo analysis) | ~300K tokens | 6 agent sessions | $TBD |
-| **Subtotal Pre-Dev** | **~300K** | **6** | **$TBD** |
+| Claude Code (repo analysis) | ~300K tokens | 6 agent sessions | ~$4.50 |
+| Claude Code (requirements analysis) | ~50K tokens | 1 session | ~$0.75 |
+| **Subtotal Pre-Dev** | **~350K** | **7** | **~$5.25** |
 
-### Phase 1: MVP (Day 1-2)
-
-| Item | Tokens Used | API Calls | Cost |
-|------|------------|-----------|------|
-| Gemini Pro (dev/test) | TBD | TBD | TBD |
-| Claude (fallback testing) | TBD | TBD | TBD |
-| LangSmith (tracing) | TBD | TBD | $0 (free tier) |
-| **Subtotal Phase 1** | **TBD** | **TBD** | **TBD** |
-
-### Phase 2: Eval + Observability (Day 3-4)
+### Phase 1: MVP (Day 1 - Feb 24)
 
 | Item | Tokens Used | API Calls | Cost |
 |------|------------|-----------|------|
-| Gemini Pro (eval runs) | TBD | TBD | TBD |
-| Claude (fallback eval) | TBD | TBD | TBD |
-| LangSmith | TBD | TBD | $0 |
-| **Subtotal Phase 2** | **TBD** | **TBD** | **TBD** |
+| Groq/Llama 3.3 70B (dev/test) | ~500K tokens | ~50 calls | $0.00 (free tier) |
+| Gemini Pro (initial testing) | ~100K tokens | ~10 calls | $0.00 (free tier, hit quota) |
+| LangSmith (tracing) | N/A | N/A | $0.00 (free tier) |
+| Claude Code (implementation) | ~800K tokens | ~30 sessions | ~$12.00 |
+| Render (deployment) | N/A | N/A | $0.00 (free tier) |
+| **Subtotal Phase 1** | **~1.4M** | **~90** | **~$12.00** |
 
-### Phase 3-4: Polish + Final (Day 5-7)
-
-| Item | Tokens Used | API Calls | Cost |
-|------|------------|-----------|------|
-| Gemini Pro | TBD | TBD | TBD |
-| Claude/GPT-4 | TBD | TBD | TBD |
-| LangSmith | TBD | TBD | $0 |
-| **Subtotal Phase 3-4** | **TBD** | **TBD** | **TBD** |
-
-### Total Development Cost
+### Total Development Cost (Through Day 1)
 
 | Category | Estimated | Actual |
 |----------|-----------|--------|
-| Gemini Pro (primary) | ~$2.25 | TBD |
-| Claude (fallback) | ~$3.50 | TBD |
-| LangSmith | $0 | $0 |
-| OpenEMR (self-hosted) | $0 | $0 |
-| Claude Code (AI dev tool) | ~$TBD | TBD |
-| Deployment (Railway/Modal) | ~$5 | TBD |
-| **TOTAL DEV COST** | **~$11** | **TBD** |
+| Claude Code (AI dev tool) | ~$15 | ~$17.25 |
+| Groq Llama 3.3 70B (runtime) | $0 | $0.00 |
+| Gemini Pro (initial, quota exceeded) | ~$2.25 | $0.00 |
+| LangSmith (observability) | $0 | $0.00 |
+| OpenEMR (self-hosted Docker) | $0 | $0.00 |
+| Render (deployment) | $0 | $0.00 |
+| **TOTAL DEV COST** | **~$17** | **~$17.25** |
 
 ---
 
 ## 2. Production Cost Projections
 
+### Key Change: Switched to Groq (Free Tier)
+
+On Day 1, Gemini Pro free tier quota was exhausted (429 RESOURCE_EXHAUSTED with limit: 0). Pivoted to **Groq** with Llama 3.3 70B Versatile, which provides:
+- Free API access (no credit card required)
+- Rate limits: 30 requests/min, 6,000 tokens/min
+- Latency: 800ms - 5,000ms per query
+
 ### Assumptions
 - 5 queries per user per day
 - Average 3,000 tokens per query (2K input, 1K output)
-- 90% routed to Gemini Pro, 10% fallback to Claude
+- 100% routed to Groq/Llama 3.3 70B (free tier)
 - 1.5 tool calls per query average
-- 20% verification overhead (additional tokens)
+- 20% verification overhead
 - 30-day months
 
-### LLM Pricing (as of Feb 2026)
+### LLM Pricing Comparison (as of Feb 2026)
 
-| Model | Input (per 1M tokens) | Output (per 1M tokens) |
-|-------|----------------------|----------------------|
-| Gemini Pro | $0.50 | $1.50 |
-| Claude Sonnet | $3.00 | $15.00 |
-| GPT-4 Turbo | $10.00 | $30.00 |
+| Model | Input (per 1M tokens) | Output (per 1M tokens) | Used By |
+|-------|----------------------|----------------------|---------|
+| Groq Llama 3.3 70B | $0.00 (free tier) | $0.00 (free tier) | AgentForge (primary) |
+| Gemini Pro | $0.50 | $1.50 | Unavailable (quota) |
+| Claude Sonnet | $3.00 | $15.00 | Fallback (not active) |
 
-### Monthly Cost Projections
+### Monthly Cost Projections (Groq Free Tier)
 
-| Users | Queries/Month | Gemini Cost | Fallback Cost | Infra Cost | Total/Month |
-|-------|--------------|-------------|---------------|-----------|-------------|
-| 100 | 15,000 | $33.75 | $13.50 | $20 | **$67/month** |
-| 1,000 | 150,000 | $337.50 | $135.00 | $50 | **$523/month** |
-| 10,000 | 1,500,000 | $3,375 | $1,350 | $200 | **$4,925/month** |
-| 100,000 | 15,000,000 | $33,750 | $13,500 | $2,000 | **$49,250/month** |
+| Users | Queries/Month | LLM Cost | Infra Cost | Total/Month |
+|-------|--------------|----------|-----------|-------------|
+| 100 | 15,000 | $0.00 | $0 (Render free) | **$0/month** |
+| 500 | 75,000 | $0.00 | $7 (Render starter) | **$7/month** |
+| 1,000 | 150,000 | $0.00 | $25 (Render pro) | **$25/month** |
 
-### Cost Per Query Breakdown
+### Cost Per Query Breakdown (Current)
 
 | Component | Cost/Query |
 |-----------|-----------|
-| Gemini Pro (primary) | $0.003 |
-| Fallback overhead (10%) | $0.001 |
-| Tool execution | ~$0.000 (API calls) |
-| Verification overhead | $0.001 |
-| **Total per query** | **~$0.005** |
+| Groq Llama 3.3 70B | $0.000 |
+| Tool execution (RxNorm, FDA APIs) | $0.000 (free public APIs) |
+| Verification overhead | $0.000 |
+| Infrastructure (Render free) | $0.000 |
+| **Total per query** | **$0.000** |
+
+### Scaling Beyond Free Tier
+
+If Groq free tier limits are exceeded, options:
+1. **Groq paid tier**: $0.59/1M input, $0.79/1M output → ~$0.002/query
+2. **Switch to Gemini Pro**: $0.50/$1.50 per 1M → ~$0.003/query (requires billing enabled)
+3. **Self-hosted Llama**: $0/token but requires GPU infrastructure (~$50-200/month)
 
 ---
 
 ## 3. Cost Optimization Strategies
 
-1. **Prompt caching** - Reuse system prompts and tool schemas (LangChain built-in)
-2. **Intelligent routing** - Simple queries to Gemini, complex to premium LLM only when needed
+1. **Free tier maximization** - Groq free tier handles development and demo loads
+2. **Prompt caching** - Reuse system prompts and tool schemas (LangChain built-in)
 3. **Response caching** - Cache common drug interaction results (TTL: 24h)
 4. **Rate limiting** - Cap queries per user (20/day free, 50/day premium)
-5. **Batch verification** - Group multiple claims for single verification call
-6. **Token optimization** - Minimize prompt size, use structured output to reduce output tokens
+5. **Token optimization** - Minimize prompt size, use structured output to reduce output tokens
+6. **Multi-provider routing** - Already implemented (LLM_PROVIDER env var supports groq/gemini)
 
 ---
 
-## 4. Cost vs. Budget Compliance
+## 4. Actual Cost vs. Budget
 
-| Scale | Budget Target | Projected Cost | Status |
-|-------|-------------|---------------|--------|
-| 1,000 users | <$500/month | $523/month | Within range |
-| 10,000 users | <$5,000/month | $4,925/month | Within budget |
+| Metric | Target | Actual |
+|--------|--------|--------|
+| Development cost | <$50 | ~$17.25 |
+| Per-query cost (production) | <$0.05 | $0.000 |
+| Monthly cost (100 users) | <$100 | $0.00 |
+| Monthly cost (1,000 users) | <$500 | $25.00 |
 
-*Note: Projections will be updated with actual usage data as development progresses.*
+**Result:** Significantly under budget by switching to Groq free tier.

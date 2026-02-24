@@ -14,13 +14,23 @@ from app.observability import RequestTracer
 from app.tools.appointment_availability import appointment_availability
 from app.tools.drug_interaction import drug_interaction_check
 from app.tools.insurance_coverage import insurance_coverage_check
+from app.tools.medication_lookup import medication_lookup
 from app.tools.provider_search import provider_search
 from app.tools.symptom_lookup import symptom_lookup
 
 logger = logging.getLogger(__name__)
 
-# All available healthcare tools (5 required by PRD)
-TOOLS = [drug_interaction_check, symptom_lookup, provider_search, appointment_availability, insurance_coverage_check]
+# Export LangSmith env vars so LangChain SDK picks them up
+if settings.langchain_tracing_v2 and settings.langchain_api_key:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
+    os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
+    logger.info("LangSmith tracing enabled for project: %s", settings.langchain_project)
+elif settings.langchain_tracing_v2:
+    logger.warning("LangSmith tracing requested but LANGCHAIN_API_KEY is not set")
+
+# All available healthcare tools (6 per PRD)
+TOOLS = [drug_interaction_check, symptom_lookup, provider_search, appointment_availability, insurance_coverage_check, medication_lookup]
 
 
 def _create_llm() -> BaseChatModel:
@@ -185,3 +195,92 @@ async def chat(message: str, session_id: str = "default") -> dict:
             "trace_id": trace_id,
             "error": error_detail,
         }
+
+
+async def chat_stream(message: str, session_id: str = "default"):
+    """Stream agent response tokens. Yields dicts with 'type' and 'content' keys.
+
+    Event types:
+    - 'token': A chunk of the response text
+    - 'tool_start': A tool is being called (content = tool name)
+    - 'tool_end': A tool finished (content = tool name)
+    - 'done': Stream complete (content = full metadata dict as JSON)
+    - 'error': An error occurred (content = error message)
+    """
+    import json as _json
+
+    trace_id = str(uuid.uuid4())[:8]
+    tracer = RequestTracer(query=message, session_id=session_id, trace_id=trace_id)
+    tracer.start()
+
+    config = {"configurable": {"thread_id": session_id}}
+    history = get_session_history(session_id)
+    history.add_user_message(message)
+
+    full_response = ""
+    tools_used = []
+    input_tokens = 0
+    output_tokens = 0
+
+    try:
+        agent = get_agent()
+        tracer.start_llm()
+
+        async for event in agent.astream_events(
+            {"messages": [HumanMessage(content=message)]},
+            config=config,
+            version="v2",
+        ):
+            kind = event.get("event", "")
+
+            if kind == "on_chat_model_stream":
+                chunk = event.get("data", {}).get("chunk")
+                if chunk and hasattr(chunk, "content") and chunk.content:
+                    # Only yield content from the final AI response (not tool-calling steps)
+                    if not getattr(chunk, "tool_calls", None) and not getattr(chunk, "tool_call_chunks", None):
+                        full_response += chunk.content
+                        yield {"type": "token", "content": chunk.content}
+
+            elif kind == "on_tool_start":
+                tool_name = event.get("name", "unknown")
+                tools_used.append(tool_name)
+                yield {"type": "tool_start", "content": tool_name}
+
+            elif kind == "on_tool_end":
+                tool_name = event.get("name", "unknown")
+                tracer.end_tool(tool_name)
+                yield {"type": "tool_end", "content": tool_name}
+
+        tracer.end_llm()
+
+        # Extract sources
+        sources = []
+        if "Source:" in full_response:
+            for line in full_response.split("\n"):
+                if line.strip().startswith("Source:"):
+                    sources.append(line.strip().replace("Source: ", ""))
+
+        tracer.set_tokens(input_tokens, output_tokens)
+        tracer.set_response(full_response, confidence=0.0, sources=sources)
+        history.add_ai_message(full_response)
+        trim_history(session_id)
+        trace_record = tracer.finish()
+
+        yield {
+            "type": "done",
+            "content": _json.dumps({
+                "response": full_response,
+                "sources": sources,
+                "tools_used": list(set(tools_used)),
+                "trace_id": trace_id,
+                "session_id": session_id,
+                "latency_ms": trace_record.total_latency_ms,
+                "tokens": {"input": input_tokens, "output": output_tokens, "total": input_tokens + output_tokens},
+            }),
+        }
+
+    except Exception as e:
+        logger.error("Agent stream error: %s", e, exc_info=True)
+        tracer.set_error(str(e), category=type(e).__name__)
+        tracer.finish()
+        yield {"type": "error", "content": str(e)}
