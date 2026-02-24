@@ -157,9 +157,11 @@ async def chat(message: str, session_id: str = "default") -> dict:
         tracer.set_error(str(e), category=type(e).__name__)
         tracer.finish()
 
+        error_detail = f"{type(e).__name__}: {e}"
         error_msg = (
             "I apologize, but I encountered an error processing your request. "
             "Please try rephrasing your question or try again later.\n\n"
+            f"**Debug info:** `{error_detail}`\n\n"
             "If you're experiencing a medical emergency, please call 911 immediately."
         )
         history.add_ai_message(error_msg)
@@ -170,5 +172,5 @@ async def chat(message: str, session_id: str = "default") -> dict:
             "tools_used": [],
             "session_id": session_id,
             "trace_id": trace_id,
-            "error": str(e),
+            "error": error_detail,
         }

@@ -273,4 +273,8 @@ def get_dashboard_stats() -> dict:
         "escalation_count": escalations,
         "feedback": {"thumbs_up": thumbs_up, "thumbs_down": thumbs_down},
         "eval_history": _eval_history[-5:],  # Last 5 eval runs
+        "recent_errors": [
+            {"trace_id": t.trace_id, "error": t.error, "category": t.error_category}
+            for t in _traces[-10:] if t.error
+        ],
     }
