@@ -173,7 +173,6 @@ async def chat(message: str, session_id: str = "default") -> dict:
         error_msg = (
             "I apologize, but I encountered an error processing your request. "
             "Please try rephrasing your question or try again later.\n\n"
-            f"**Debug info:** `{error_detail}`\n\n"
             "If you're experiencing a medical emergency, please call 911 immediately."
         )
         history.add_ai_message(error_msg)

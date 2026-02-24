@@ -9,7 +9,7 @@ API_BASE_URL = "http://localhost:8000/api"
 st.set_page_config(
     page_title="AgentForge Healthcare AI",
     page_icon="🏥",
-    layout="wide",
+    layout="centered",
 )
 
 
@@ -36,7 +36,7 @@ def send_message(message: str) -> dict | None:
             st.error(f"API error: {resp.status_code}")
             return None
     except httpx.ConnectError:
-        st.error("Cannot connect to AgentForge backend. Make sure the API server is running on port 8000.")
+        st.error("Cannot connect to backend. Please try again in a moment.")
         return None
 
 
@@ -68,29 +68,42 @@ def get_dashboard_stats() -> dict | None:
     return None
 
 
+EXAMPLE_QUESTIONS = [
+    "Check interaction between warfarin and aspirin",
+    "I have a persistent headache with fever",
+    "Find me a cardiologist",
+    "What appointments are available for neurology?",
+    "Does Blue Cross PPO cover an MRI?",
+]
+
+
 def main():
     init_session()
 
     # Header
     st.title("AgentForge Healthcare AI")
-    st.caption("AI-powered healthcare assistant - Not a substitute for professional medical advice")
+
+    # Medical disclaimer banner
+    st.warning(
+        "This is an AI assistant for **educational purposes only**. "
+        "It is not a substitute for professional medical advice, diagnosis, or treatment. "
+        "If you are experiencing a medical emergency, call **911** immediately.",
+        icon="⚕️",
+    )
 
     # Sidebar
     with st.sidebar:
-        st.header("About")
+        st.markdown("### About")
         st.markdown(
-            "AgentForge is a healthcare AI agent that can:\n"
-            "- Check drug interactions\n"
-            "- Look up symptoms and conditions\n"
-            "- Find healthcare providers\n"
-            "- Check appointment availability\n"
-            "- Verify insurance coverage\n"
+            "AgentForge is a healthcare AI agent powered by "
+            "LangChain + Llama 3.3 with 5 specialized tools:\n\n"
+            "**Drug Interactions** · **Symptom Lookup** · "
+            "**Provider Search** · **Appointments** · **Insurance**"
         )
 
         st.divider()
-        st.subheader("Session")
-        st.text(f"ID: {st.session_state.session_id[:8]}...")
-        if st.button("New Conversation"):
+
+        if st.button("New Conversation", use_container_width=True):
             try:
                 with httpx.Client(timeout=10.0) as client:
                     client.post(
@@ -103,48 +116,16 @@ def main():
             st.session_state.messages = []
             st.rerun()
 
-        st.divider()
-        st.subheader("Example Questions")
-        examples = [
-            "Check interaction between warfarin and aspirin",
-            "I have a persistent headache with fever",
-            "Find me a cardiologist",
-            "What appointments are available for neurology?",
-            "Does Blue Cross PPO cover an MRI?",
-        ]
-        for example in examples:
-            if st.button(example, key=f"ex_{example[:20]}"):
-                st.session_state.pending_example = example
-                st.rerun()
-
-        # System debug info
-        st.divider()
-        st.subheader("System Debug")
-        if st.button("Run Diagnostics"):
-            try:
-                with httpx.Client(timeout=15.0) as client:
-                    resp = client.get(f"{API_BASE_URL.replace('/api', '')}/debug")
-                    if resp.status_code == 200:
-                        debug_data = resp.json()
-                        for key, val in debug_data.items():
-                            st.text(f"{key}: {val}")
-                    else:
-                        st.error(f"Debug endpoint returned {resp.status_code}")
-            except Exception as e:
-                st.error(f"Debug failed: {e}")
-
-        # Observability dashboard in sidebar
-        st.divider()
-        st.subheader("Observability")
+        # Observability dashboard
         stats = get_dashboard_stats()
         if stats and stats.get("total_requests", 0) > 0:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Requests", stats["total_requests"])
-                st.metric("Avg Latency", f"{stats.get('avg_latency_ms', 0):.0f}ms")
-            with col2:
-                st.metric("Errors", stats.get("error_count", 0))
-                st.metric("Avg Confidence", f"{stats.get('avg_confidence', 0):.0%}")
+            st.divider()
+            st.markdown("### Stats")
+            c1, c2 = st.columns(2)
+            c1.metric("Requests", stats["total_requests"])
+            c2.metric("Errors", stats.get("error_count", 0))
+            c1.metric("Avg Latency", f"{stats.get('avg_latency_ms', 0):.0f}ms")
+            c2.metric("Avg Confidence", f"{stats.get('avg_confidence', 0):.0%}")
 
             fb = stats.get("feedback", {})
             if fb.get("thumbs_up", 0) or fb.get("thumbs_down", 0):
@@ -152,17 +133,40 @@ def main():
 
             total_cost = stats.get("total_cost_usd", 0)
             if total_cost > 0:
-                st.caption(f"Total cost: ${total_cost:.4f}")
-        else:
-            st.caption("No data yet - start chatting!")
+                st.caption(f"Est. cost: ${total_cost:.4f}")
 
-    # Display chat history
-    for i, msg in enumerate(st.session_state.messages):
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-            if msg["role"] == "assistant" and msg.get("metadata"):
-                meta = msg["metadata"]
-                _render_metadata(meta, i)
+        # Debug (collapsed by default)
+        with st.expander("System Debug", expanded=False):
+            st.caption(f"Session: {st.session_state.session_id[:8]}")
+            if st.button("Run Diagnostics", key="diag"):
+                try:
+                    with httpx.Client(timeout=15.0) as client:
+                        resp = client.get(f"{API_BASE_URL.replace('/api', '')}/debug")
+                        if resp.status_code == 200:
+                            st.json(resp.json())
+                        else:
+                            st.error(f"Debug returned {resp.status_code}")
+                except Exception as e:
+                    st.error(f"Debug failed: {e}")
+
+    # Chat area
+    if not st.session_state.messages:
+        # Welcome state with example prompts
+        st.markdown("#### Try asking:")
+        cols = st.columns(2)
+        for i, example in enumerate(EXAMPLE_QUESTIONS):
+            col = cols[i % 2]
+            with col:
+                if st.button(f"💬 {example}", key=f"welcome_{i}", use_container_width=True):
+                    st.session_state.pending_example = example
+                    st.rerun()
+    else:
+        # Display chat history
+        for i, msg in enumerate(st.session_state.messages):
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+                if msg["role"] == "assistant" and msg.get("metadata"):
+                    _render_metadata(msg["metadata"], i)
 
     # Handle pending example question
     if "pending_example" in st.session_state:
@@ -175,36 +179,39 @@ def main():
 
 
 def _render_metadata(meta: dict, msg_index: int):
-    """Render response metadata (tools, confidence, sources, feedback)."""
-    cols = st.columns(4)
-    with cols[0]:
-        if meta.get("tools_used"):
-            st.caption(f"Tools: {', '.join(meta['tools_used'])}")
-    with cols[1]:
-        confidence = meta.get("confidence", 0)
-        color = "green" if confidence >= 0.7 else "orange" if confidence >= 0.5 else "red"
-        st.caption(f"Confidence: :{color}[{confidence:.0%}]")
-    with cols[2]:
-        if meta.get("sources"):
-            st.caption(f"Sources: {len(meta['sources'])}")
-    with cols[3]:
-        latency = meta.get("latency_ms", 0)
-        if latency:
-            st.caption(f"Latency: {latency:.0f}ms")
+    """Render response metadata (tools, confidence, feedback)."""
+    # Compact info line
+    parts = []
+    if meta.get("tools_used"):
+        tools_str = ", ".join(meta["tools_used"])
+        parts.append(f"**Tools:** {tools_str}")
+
+    confidence = meta.get("confidence", 0)
+    color = "green" if confidence >= 0.7 else "orange" if confidence >= 0.5 else "red"
+    parts.append(f"**Confidence:** :{color}[{confidence:.0%}]")
+
+    latency = meta.get("latency_ms", 0)
+    if latency:
+        parts.append(f"**Latency:** {latency:.0f}ms")
+
+    if meta.get("sources"):
+        parts.append(f"**Sources:** {len(meta['sources'])}")
+
+    st.caption(" · ".join(parts))
 
     # Feedback buttons
     trace_id = meta.get("trace_id", "")
     if trace_id:
         feedback_key = f"feedback_{msg_index}"
         if feedback_key not in st.session_state:
-            bcol1, bcol2, bcol3 = st.columns([1, 1, 8])
+            bcol1, bcol2, bcol3 = st.columns([1, 1, 10])
             with bcol1:
-                if st.button("👍", key=f"up_{msg_index}", help="Helpful response"):
+                if st.button("👍", key=f"up_{msg_index}", help="Helpful"):
                     send_feedback(trace_id, "up")
                     st.session_state[feedback_key] = "up"
                     st.rerun()
             with bcol2:
-                if st.button("👎", key=f"down_{msg_index}", help="Unhelpful response"):
+                if st.button("👎", key=f"down_{msg_index}", help="Not helpful"):
                     send_feedback(trace_id, "down")
                     st.session_state[feedback_key] = "down"
                     st.rerun()
@@ -216,14 +223,12 @@ def _render_metadata(meta: dict, msg_index: int):
 
 def _process_message(message: str):
     """Process a user message and get agent response."""
-    # Add user message
     st.session_state.messages.append({"role": "user", "content": message})
     with st.chat_message("user"):
         st.markdown(message)
 
-    # Get agent response
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
+        with st.spinner("Analyzing your query..."):
             result = send_message(message)
 
         if result:
