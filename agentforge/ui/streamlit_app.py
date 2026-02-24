@@ -117,6 +117,22 @@ def main():
                 st.session_state.pending_example = example
                 st.rerun()
 
+        # System debug info
+        st.divider()
+        st.subheader("System Debug")
+        if st.button("Run Diagnostics"):
+            try:
+                with httpx.Client(timeout=15.0) as client:
+                    resp = client.get(f"{API_BASE_URL.replace('/api', '')}/debug")
+                    if resp.status_code == 200:
+                        debug_data = resp.json()
+                        for key, val in debug_data.items():
+                            st.text(f"{key}: {val}")
+                    else:
+                        st.error(f"Debug endpoint returned {resp.status_code}")
+            except Exception as e:
+                st.error(f"Debug failed: {e}")
+
         # Observability dashboard in sidebar
         st.divider()
         st.subheader("Observability")
