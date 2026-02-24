@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     openemr_client_secret: str = ""
 
     # LangSmith
-    langchain_tracing_v2: bool = True
+    langchain_tracing_v2: bool = False
     langchain_api_key: str = ""
     langchain_project: str = "agentforge-healthcare"
 

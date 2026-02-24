@@ -44,7 +44,7 @@ def create_agent():
         model=llm,
         tools=TOOLS,
         checkpointer=memory,
-        prompt=HEALTHCARE_AGENT_SYSTEM_PROMPT,
+        state_modifier=HEALTHCARE_AGENT_SYSTEM_PROMPT,
     )
     return agent
 
